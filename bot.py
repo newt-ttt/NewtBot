@@ -30,7 +30,7 @@ def create_hash(filename):
         hash = hashlib.sha256(file.read()).hexdigest()
     return hash
 
-vtclient = vt.Client("70c6d2530457122bd29f961514fef3b54801b8f0c0d1a916b3f1f9f92cfa92b2")
+vtclient = vt.Client("<Insert Your VirusTotal Client Key Here>")
 
 intent = discord.Intents.default()
 intent.messages= True
@@ -206,4 +206,4 @@ class MyClient(discord.Client):
         print(queue)
         return queue
      
-client.run("OTAwMTYzNTE2MTk4MTY2NTg4.G-0JxO.RhqoHbxyYFZ4VIfY3d_5RxKw18SezMWJzZiQCY")
+client.run("<Insert Your Discord Key Here>")
