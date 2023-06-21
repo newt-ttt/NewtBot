@@ -4,12 +4,12 @@ import discord
 from discord import Intents
 import os
 import time
+from time import sleep
 import asyncio
 import scanning_functions
 import vt
 import hashlib
-
-
+import pytube as pt
 
 def embedbuilder(Title, desc, size = None, Color= None):
     results = 'Results:'
@@ -40,7 +40,9 @@ intent.guilds = True
 client = discord.Client(intents = Intents.all())
 
 class MyClient(discord.Client):
-
+    VCqueue = []
+    VCclient = None
+    
     @client.event
     async def on_ready():
         print('We have logged in as {0.user}'.format(client))
@@ -102,6 +104,52 @@ class MyClient(discord.Client):
                     t2 = time.time()
                     await message.channel.send(f'URL scanned in {round(t2-t1, 2)}s')
             
+        # MUSIC PLAYING SECTION
+        if message.content.startswith('!p '):                             # Playing the first song from nothing
+            
+            search_req = message.content[3:]
+            MyClient.VCqueue = MyClient.find_video(search_req, MyClient.VCqueue)    # Find the video and add it to the queue w/ its title
+
+            try:
+                if MyClient.VCclient.is_playing():
+                    active = True
+                else:
+                    active = False
+            except:
+                    active = False
+                    
+            if not active: 
+                try:
+                    userVC = message.author.voice               # userVC is the channel the user that sent the message is in
+                    try:
+                        MyClient.VCclient = await userVC.channel.connect()                  # Join the channel, VCclient is a VoiceClient object
+                    except:
+                        print("Already connected to a call")
+                        
+                    current_song = discord.FFmpegPCMAudio(executable="E:\\ffmpeg\\bin\\ffmpeg.exe",source=MyClient.VCqueue[0][1])   # current_song is the file at the path given as an AudioSource object
+                    await message.channel.send(f"Now playing: {MyClient.VCqueue.pop(0)[0]}")
+                    
+                    MyClient.VCclient.play(current_song) 
+                    sleep(1.5)
+                    await MyClient.initialize_player(message)        # Begin the process for checking if we need to play the next song in queue
+                    
+                except AttributeError:              # If the user isnt in a channel, AttributeError is raised
+                    await message.reply("User must be in a voice channel to use music commands.")
+        
+        if message.content.startswith('!skip'):
+            if MyClient.VCclient.is_playing():
+                MyClient.VCclient.stop()
+                await MyClient.playnext(message)
+
+            
+        if message.content.startswith('!clear'):
+            if MyClient.VCclient.is_playing() == True:
+                MyClient.VCclient.stop()
+                MyClient.VCqueue = []
+                await message.channel.send("Queue has been cleared")
+            
+        # END MUSIC PLAYING SECTION
+            
         if message.content.startswith("who am i"):
             await message.channel.send(str(message.author.id))
         
@@ -111,5 +159,27 @@ class MyClient(discord.Client):
                 members += '>'+i.name + '\n'
             await message.channel.send(members)
             
+    async def initialize_player(message):
+        while len(MyClient.VCqueue) != 0:
+            if MyClient.VCclient.is_playing():
+                sleep(0.1)
+            else:
+                MyClient.playnext(message)
+        print("DONE WITH QUEUE")
+        return  
+
+    async def playnext(message):
+        (current_title, current_path) = MyClient.VCqueue.pop(0)
+        current_song = discord.FFmpegPCMAudio(executable="E:\\ffmpeg\\bin\\ffmpeg.exe",source=current_path)
+        await message.channel.send(f"Now playing: {current_title}")
+        MyClient.VCclient.play(current_song)
+        
+    def find_video(search_param, queue):
+        topresult = pt.Search(search_param).results[0]
+        audio_track = topresult.streams.filter(abr=None)[-1]
+        path = audio_track.download(output_path="E:\\newtbot\\queue")
+        queue.append((topresult.title, path))
+        print(queue)
+        return queue
      
 client.run("<Insert Your Discord Key Here>")
