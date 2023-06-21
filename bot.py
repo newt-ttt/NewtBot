@@ -42,6 +42,8 @@ client = discord.Client(intents = Intents.all())
 class MyClient(discord.Client):
     VCqueue = []
     VCclient = None
+    VCcurrent = (None, None)
+    VCloop = False
     
     @client.event
     async def on_ready():
@@ -104,7 +106,7 @@ class MyClient(discord.Client):
                     t2 = time.time()
                     await message.channel.send(f'URL scanned in {round(t2-t1, 2)}s')
             
-        # MUSIC PLAYING SECTION
+    # MUSIC PLAYING STUFF
         if message.content.startswith('!p '):                             # Playing the first song from nothing
             
             search_req = message.content[3:]
@@ -119,37 +121,48 @@ class MyClient(discord.Client):
                     active = False
                     
             if not active: 
-                try:
-                    userVC = message.author.voice               # userVC is the channel the user that sent the message is in
+                
+                if MyClient.VCclient is not None:
+                    print("Already connected to a channel")
+                else:
                     try:
+                        userVC = message.author.voice               # userVC is the channel the user that sent the message is in
                         MyClient.VCclient = await userVC.channel.connect()                  # Join the channel, VCclient is a VoiceClient object
-                    except:
-                        print("Already connected to a call")
-                        
-                    current_song = discord.FFmpegPCMAudio(executable="E:\\ffmpeg\\bin\\ffmpeg.exe",source=MyClient.VCqueue[0][1])   # current_song is the file at the path given as an AudioSource object
-                    await message.channel.send(f"Now playing: {MyClient.VCqueue.pop(0)[0]}")
-                    
-                    MyClient.VCclient.play(current_song) 
-                    sleep(1.5)
-                    await MyClient.initialize_player(message)        # Begin the process for checking if we need to play the next song in queue
-                    
-                except AttributeError:              # If the user isnt in a channel, AttributeError is raised
-                    await message.reply("User must be in a voice channel to use music commands.")
-        
+                    except AttributeError:              # If the user isnt in a channel, AttributeError is raised
+                        await message.reply("User must be in a voice channel to use music commands.")
+                MyClient.VCcurrent = MyClient.VCqueue.pop(0)
+                current_song = discord.FFmpegPCMAudio(executable="E:\\ffmpeg\\bin\\ffmpeg.exe",source=MyClient.VCcurrent[1])   # current_song is the file at the path given as an AudioSource object
+                await message.channel.send(f"Now playing: {MyClient.VCcurrent[0]}")
+                
+                MyClient.VCclient.play(current_song) 
+                
+                await MyClient.initialize_player(message)        # Begin the process for checking if we need to play the next song in queue
+                
+    # SKIP
         if message.content.startswith('!skip'):
-            if MyClient.VCclient.is_playing():
+            if MyClient.VCclient.is_playing() and (len(MyClient.VCqueue) != 0 or MyClient.VCloop == True):
                 MyClient.VCclient.stop()
                 await MyClient.playnext(message)
-
-            
+            else:
+                MyClient.VCclient.stop()
+                MyClient.VCcurrent == None
+                await message.channel.send("Queue is empty, stopping.")
+        
+    # CLEAR
         if message.content.startswith('!clear'):
             if MyClient.VCclient.is_playing() == True:
-                MyClient.VCclient.stop()
                 MyClient.VCqueue = []
                 await message.channel.send("Queue has been cleared")
-            
-        # END MUSIC PLAYING SECTION
-            
+                
+    # LOOP
+        if message.content.startswith('!loop'):
+            if MyClient.VCclient.is_playing() and MyClient.VCloop == False:
+                MyClient.VCloop = True
+                await message.channel.send("Looping On")
+            else:
+                MyClient.VCloop = False
+                await message.channel.send("Looping Off")
+    # MISC       
         if message.content.startswith("who am i"):
             await message.channel.send(str(message.author.id))
         
@@ -159,17 +172,28 @@ class MyClient(discord.Client):
                 members += '>'+i.name + '\n'
             await message.channel.send(members)
             
+            
     async def initialize_player(message):
-        while len(MyClient.VCqueue) != 0:
+        """_summary_
+            This function basically polls whenever there's something playing, so that once it ends it automatically goes to the next item.
+        Args:
+            message (_type_): _description_
+        """
+        while True:
             if MyClient.VCclient.is_playing():
-                sleep(0.1)
+                await asyncio.sleep(0.1)
             else:
-                MyClient.playnext(message)
-        print("DONE WITH QUEUE")
-        return  
-
+                try:
+                    await MyClient.playnext(message)
+                except:
+                    await message.channel.send("Queue is empty, stopping.")
+                    return
+            
     async def playnext(message):
-        (current_title, current_path) = MyClient.VCqueue.pop(0)
+        if MyClient.VCloop == False:
+            MyClient.VCcurrent = MyClient.VCqueue.pop(0)
+            
+        (current_title, current_path) = MyClient.VCcurrent
         current_song = discord.FFmpegPCMAudio(executable="E:\\ffmpeg\\bin\\ffmpeg.exe",source=current_path)
         await message.channel.send(f"Now playing: {current_title}")
         MyClient.VCclient.play(current_song)
