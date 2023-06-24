@@ -10,6 +10,10 @@ Added music player functionality with !p, !skip, !clear, !loop
 6/23/23
 Added second thread for downloading audio
 
+6/24/23
+Multithreading wasn't working before, now it actually is.
+Added !queue, which sends an embed with a list of all the songs in the current queue
+
 -----------------------------------------------------------------------------------------------------------------------------------
 bot.py contains almost all the significant code for the bot to work, and is also the main file.
 scanning_functions.py includes 2 functions, one async function that downloads the file so it can be scanned, the other to format the file size into something more legible.
