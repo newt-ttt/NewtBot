@@ -10,6 +10,9 @@ import scanning_functions
 import vt
 import hashlib
 import pytube as pt
+import yt_dlp
+from threading import Thread
+
 
 def embedbuilder(Title, desc, size = None, Color= None):
     results = 'Results:'
@@ -110,7 +113,7 @@ class MyClient(discord.Client):
         if message.content.startswith('!p '):                             # Playing the first song from nothing
             
             search_req = message.content[3:]
-            MyClient.VCqueue = MyClient.find_video(search_req, MyClient.VCqueue)    # Find the video and add it to the queue w/ its title
+            MyClient.VCqueue = await MyClient.find_video(search_req, MyClient.VCqueue)    # Find the video and add it to the queue w/ its title
 
             try:
                 if MyClient.VCclient.is_playing():
@@ -142,11 +145,11 @@ class MyClient(discord.Client):
         if message.content.startswith('!skip'):
             if MyClient.VCclient.is_playing() and (len(MyClient.VCqueue) != 0 or MyClient.VCloop == True):
                 MyClient.VCclient.stop()
-                await MyClient.playnext(message)
+                current_title = MyClient.playnext(message)
+                await message.channel.send(f"Now playing: {current_title}")
             else:
                 MyClient.VCclient.stop()
-                MyClient.VCcurrent == None
-                await message.channel.send("Queue is empty, stopping.")
+                MyClient.VCcurrent = None
         
     # CLEAR
         if message.content.startswith('!clear'):
@@ -154,7 +157,7 @@ class MyClient(discord.Client):
                 MyClient.VCqueue = []
                 await message.channel.send("Queue has been cleared")
                 
-    # LOOP
+    #LOOP
         if message.content.startswith('!loop'):
             if MyClient.VCclient.is_playing() and MyClient.VCloop == False:
                 MyClient.VCloop = True
@@ -162,6 +165,7 @@ class MyClient(discord.Client):
             else:
                 MyClient.VCloop = False
                 await message.channel.send("Looping Off")
+                
     # MISC       
         if message.content.startswith("who am i"):
             await message.channel.send(str(message.author.id))
@@ -179,31 +183,55 @@ class MyClient(discord.Client):
         Args:
             message (_type_): _description_
         """
+        await asyncio.sleep(2)
         while True:
             if MyClient.VCclient.is_playing():
                 await asyncio.sleep(0.1)
             else:
                 try:
-                    await MyClient.playnext(message)
+                    current_title = MyClient.playnext(message)
+                    await message.channel.send(f"Now playing: {current_title}")
                 except:
                     await message.channel.send("Queue is empty, stopping.")
                     return
             
-    async def playnext(message):
+
+    def playnext(message):
+
         if MyClient.VCloop == False:
             MyClient.VCcurrent = MyClient.VCqueue.pop(0)
             
-        (current_title, current_path) = MyClient.VCcurrent
+        current_path = MyClient.VCcurrent[1]
         current_song = discord.FFmpegPCMAudio(executable="E:\\ffmpeg\\bin\\ffmpeg.exe",source=current_path)
-        await message.channel.send(f"Now playing: {current_title}")
         MyClient.VCclient.play(current_song)
+        return MyClient.VCcurrent[0]
         
-    def find_video(search_param, queue):
+    async def find_video(search_param, queue):
         topresult = pt.Search(search_param).results[0]
-        audio_track = topresult.streams.filter(abr=None)[-1]
-        path = audio_track.download(output_path="E:\\newtbot\\queue")
-        queue.append((topresult.title, path))
+        print(topresult.video_id)
+        DLThread = Thread(target=MyClient.audiodownload, args=[topresult])
+        DLThread.start()
+        DLThread.join()
+        
+        queue.append((topresult.title, f"E:\\newtbot\\queue\\{topresult.title + f' [{topresult.video_id}]'}.m4a"))
         print(queue)
         return queue
+    
+    def audiodownload(topresult):
+        URL = [f"https://www.youtube.com/watch?v={topresult.video_id}"]
+        
+        ydl_opts = {
+        'format': 'm4a/bestaudio/best',
+        'paths': {'home': "E:\\newtbot\\queue"},
+        'ffmpeg_location': 'E:\\ffmpeg\\bin\\ffmpeg.exe',
+        'postprocessors': [{  # Extract audio using ffmpeg
+        'key': 'FFmpegExtractAudio',
+        'preferredcodec': 'm4a'
+        }]
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            audiostream = ydl.download(URL)
+            return
      
 client.run("<Insert Your Discord Key Here>")
