@@ -25,7 +25,13 @@ def embedbuilder(Title, desc, size = None, Color= None):
             results += '{}: {}\n'.format(str(key), desc[key])
         embed = discord.Embed(title= Title, description= results, color= Color)
     else:
-        embed = discord.Embed(title= Title, description= desc, color= Color)
+        # This part is set up for the music player queue command
+        newdesc = ''
+        n=1
+        for item in desc:
+           newdesc += f'{n}: {item}\n'
+           n+=1
+        embed = discord.Embed(title= Title, description= newdesc, color= Color)
     return embed
 
 def create_hash(filename):
@@ -57,7 +63,7 @@ class MyClient(discord.Client):
         if message.author == client.user:
             return
         
-        #VIRUS SCANNING CODE IN FILES
+    #VIRUS SCANNING CODE IN FILES
         if len(message.attachments) > 0:
             #saves attachment in message, returns name of file
             fname = await scanning_functions.grab_file(message)
@@ -86,7 +92,7 @@ class MyClient(discord.Client):
                     await message.channel.send(f'File scanned in {round(t2-t1, 2)}s')
                     print('File scanned')
                     
-        # VIRUS SCANNING CODE IN URLS
+    # VIRUS SCANNING CODE IN URLS
         elif any([prefix in message.content for prefix in ["http://", "https://"]]):
             
             msg_url = message.content.strip().split(" ")
@@ -110,61 +116,57 @@ class MyClient(discord.Client):
                     await message.channel.send(f'URL scanned in {round(t2-t1, 2)}s')
             
     # MUSIC PLAYING STUFF
-        if message.content.startswith('!p '):                             # Playing the first song from nothing
+        if message.content.startswith('!p '):   # Playing the first song from nothing
             
             search_req = message.content[3:]
-            MyClient.VCqueue = await MyClient.find_video(search_req, MyClient.VCqueue)    # Find the video and add it to the queue w/ its title
-
-            try:
-                if MyClient.VCclient.is_playing():
-                    active = True
-                else:
-                    active = False
-            except:
-                    active = False
-                    
-            if not active: 
+            DLThread = Thread(target = MyClient.find_video, args = [search_req]) # Find the video and add it to the queue w/ its title in a new thread
+            DLThread.start()
+ 
+            if MyClient.VCcurrent == (None, None):
                 
                 if MyClient.VCclient is not None:
                     print("Already connected to a channel")
                 else:
                     try:
-                        userVC = message.author.voice               # userVC is the channel the user that sent the message is in
+                        userVC = message.author.voice        # userVC is the channel the user that sent the message is in
                         MyClient.VCclient = await userVC.channel.connect()                  # Join the channel, VCclient is a VoiceClient object
                     except AttributeError:              # If the user isnt in a channel, AttributeError is raised
                         await message.reply("User must be in a voice channel to use music commands.")
-                MyClient.VCcurrent = MyClient.VCqueue.pop(0)
-                current_song = discord.FFmpegPCMAudio(executable="E:\\ffmpeg\\bin\\ffmpeg.exe",source=MyClient.VCcurrent[1])   # current_song is the file at the path given as an AudioSource object
-                await message.channel.send(f"Now playing: {MyClient.VCcurrent[0]}")
-                
-                MyClient.VCclient.play(current_song) 
+                        
+                DLThread.join()  
+                current_title = MyClient.playnext(message)
+                await message.channel.send(f"Now playing: {current_title}")
                 
                 await MyClient.initialize_player(message)        # Begin the process for checking if we need to play the next song in queue
                 
     # SKIP
-        if message.content.startswith('!skip'):
+        if message.content.lower().startswith('!skip'):
             if MyClient.VCclient.is_playing() and (len(MyClient.VCqueue) != 0 or MyClient.VCloop == True):
                 MyClient.VCclient.stop()
                 current_title = MyClient.playnext(message)
                 await message.channel.send(f"Now playing: {current_title}")
             else:
                 MyClient.VCclient.stop()
-                MyClient.VCcurrent = None
+                MyClient.VCcurrent = (None, None)
         
     # CLEAR
-        if message.content.startswith('!clear'):
+        if message.content.lower().startswith('!clear'):
             if MyClient.VCclient.is_playing() == True:
                 MyClient.VCqueue = []
                 await message.channel.send("Queue has been cleared")
                 
     #LOOP
-        if message.content.startswith('!loop'):
+        if message.content.lower().startswith('!loop'):
             if MyClient.VCclient.is_playing() and MyClient.VCloop == False:
                 MyClient.VCloop = True
                 await message.channel.send("Looping On")
             else:
                 MyClient.VCloop = False
                 await message.channel.send("Looping Off")
+    #QUEUE
+        if message.content.lower().startswith('!queue'):            
+            for S in MyClient.VCqueue:
+                print(f"{S[0]}")
                 
     # MISC       
         if message.content.startswith("who am i"):
@@ -197,7 +199,6 @@ class MyClient(discord.Client):
             
 
     def playnext(message):
-
         if MyClient.VCloop == False:
             MyClient.VCcurrent = MyClient.VCqueue.pop(0)
             
@@ -206,23 +207,21 @@ class MyClient(discord.Client):
         MyClient.VCclient.play(current_song)
         return MyClient.VCcurrent[0]
         
-    async def find_video(search_param, queue):
+    def find_video(search_param):
         topresult = pt.Search(search_param).results[0]
         print(topresult.video_id)
-        DLThread = Thread(target=MyClient.audiodownload, args=[topresult])
-        DLThread.start()
-        DLThread.join()
+        MyClient.audiodownload(topresult)
         
-        queue.append((topresult.title, f"E:\\newtbot\\queue\\{topresult.title + f' [{topresult.video_id}]'}.m4a"))
-        print(queue)
-        return queue
+        MyClient.VCqueue.append((topresult.title, f"queue/{topresult.video_id}.m4a"))
+        print(MyClient.VCqueue)
     
     def audiodownload(topresult):
         URL = [f"https://www.youtube.com/watch?v={topresult.video_id}"]
         
         ydl_opts = {
         'format': 'm4a/bestaudio/best',
-        'paths': {'home': "E:\\newtbot\\queue"},
+        'paths': {'home': 'queue'},
+        'outtmpl': f"{topresult.video_id}",
         'ffmpeg_location': 'E:\\ffmpeg\\bin\\ffmpeg.exe',
         'postprocessors': [{  # Extract audio using ffmpeg
         'key': 'FFmpegExtractAudio',
