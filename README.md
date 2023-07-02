@@ -14,6 +14,9 @@ Added second thread for downloading audio
 Multithreading wasn't working before, now it actually is.
 Added !queue, which sends an embed with a list of all the songs in the current queue
 
+7/2/23
+Added support to my UNIHIKER microcontroller which runs linux, in a separate branch
+
 -----------------------------------------------------------------------------------------------------------------------------------
 bot.py contains almost all the significant code for the bot to work, and is also the main file.
 scanning_functions.py includes 2 functions, one async function that downloads the file so it can be scanned, the other to format the file size into something more legible.
