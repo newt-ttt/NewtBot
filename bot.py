@@ -13,7 +13,6 @@ import pytube as pt
 import yt_dlp
 from threading import Thread
 
-
 def embedbuilder(Title, desc, size = None, Color= None):
     results = 'Results:'
     if Color == None:
@@ -39,7 +38,7 @@ def create_hash(filename):
         hash = hashlib.sha256(file.read()).hexdigest()
     return hash
 
-vtclient = vt.Client("<Insert Your VirusTotal Client Key Here>")
+vtclient = vt.Client("70c6d2530457122bd29f961514fef3b54801b8f0c0d1a916b3f1f9f92cfa92b2")
 
 intent = discord.Intents.default()
 intent.messages= True
@@ -121,8 +120,10 @@ class MyClient(discord.Client):
             search_req = message.content[3:]
             DLThread = Thread(target = MyClient.find_video, args = [search_req]) # Find the video and add it to the queue w/ its title in a new thread
             DLThread.start()
- 
+
             if MyClient.VCcurrent == (None, None):
+                DLThread.join()
+                MyClient.VCcurrent = MyClient.VCqueue[0]
                 
                 if MyClient.VCclient is not None:
                     print("Already connected to a channel")
@@ -131,13 +132,13 @@ class MyClient(discord.Client):
                         userVC = message.author.voice        # userVC is the channel the user that sent the message is in
                         MyClient.VCclient = await userVC.channel.connect()                  # Join the channel, VCclient is a VoiceClient object
                     except AttributeError:              # If the user isnt in a channel, AttributeError is raised
-                        await message.reply("User must be in a voice channel to use music commands.")
+                        await message.reply("User must be in a voice channel to use music commands.")       
                         
-                DLThread.join()  
                 current_title = MyClient.playnext(message)
                 await message.channel.send(f"Now playing: {current_title}")
                 
-                await MyClient.initialize_player(message)        # Begin the process for checking if we need to play the next song in queue
+                await MyClient.initialize_player(message)        # Begin the process for checking if we need to play the next song in queue    
+                
                 
     # SKIP
         if message.content.lower().startswith('!skip'):
@@ -195,6 +196,7 @@ class MyClient(discord.Client):
                     await message.channel.send(f"Now playing: {current_title}")
                 except:
                     await message.channel.send("Queue is empty, stopping.")
+                    await MyClient.cleanup()
                     return
             
 
@@ -203,13 +205,15 @@ class MyClient(discord.Client):
             MyClient.VCcurrent = MyClient.VCqueue.pop(0)
             
         current_path = MyClient.VCcurrent[1]
-        current_song = discord.FFmpegPCMAudio(executable="E:\\ffmpeg\\bin\\ffmpeg.exe",source=current_path)
-        MyClient.VCclient.play(current_song)
+        current_song = discord.FFmpegPCMAudio(executable="/usr/bin/ffmpeg",source=current_path)
+        try:
+            MyClient.VCclient.play(current_song)
+        except:
+            print("Error Playing Music")
         return MyClient.VCcurrent[0]
         
     def find_video(search_param):
         topresult = pt.Search(search_param).results[0]
-        print(topresult.video_id)
         MyClient.audiodownload(topresult)
         
         MyClient.VCqueue.append((topresult.title, f"queue/{topresult.video_id}.m4a"))
@@ -222,7 +226,7 @@ class MyClient(discord.Client):
         'format': 'm4a/bestaudio/best',
         'paths': {'home': 'queue'},
         'outtmpl': f"{topresult.video_id}",
-        'ffmpeg_location': 'E:\\ffmpeg\\bin\\ffmpeg.exe',
+
         'postprocessors': [{  # Extract audio using ffmpeg
         'key': 'FFmpegExtractAudio',
         'preferredcodec': 'm4a'
@@ -232,5 +236,8 @@ class MyClient(discord.Client):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             audiostream = ydl.download(URL)
             return
+        
+    async def cleanup():
+        os.system("rm queue/* ; exit")
      
-client.run("<Insert Your Discord Key Here>")
+client.run("OTAwMTYzNTE2MTk4MTY2NTg4.GrHlww.wtTGcMIwnHZxMbYPw9WBWu8dAEGXio5WCThPaU")
